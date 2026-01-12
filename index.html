@@ -1,0 +1,208 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+<title>Game kéo thả con vật</title>
+
+<style>
+* {
+    box-sizing: border-box;
+}
+
+body {
+    margin: 0;
+    font-family: Arial, sans-serif;
+    background: #eef6ff;
+    height: 100vh;
+    overflow: hidden;
+}
+
+/* ===== HEADER ===== */
+.header {
+    height: 80px;
+    text-align: center;
+    padding-top: 8px;
+}
+
+.header h1 {
+    font-size: clamp(18px, 2.5vw, 24px);
+    margin: 0;
+}
+
+#score {
+    font-size: clamp(16px, 2vw, 20px);
+    font-weight: bold;
+    color: #2c7;
+    margin-top: 4px;
+}
+
+/* ===== GAME ===== */
+.game {
+    height: calc(100vh - 80px);
+    display: flex;
+    justify-content: center;
+    gap: 24px;
+    padding: 12px 24px;
+}
+
+/* ===== COLUMN ===== */
+.column {
+    flex: 1;
+    max-width: 380px;              /* GIỚI HẠN BỀ NGANG CỘT */
+    display: grid;
+    grid-template-rows: repeat(5, 1fr);
+    gap: 12px;
+    justify-items: center;         /* CĂN GIỮA BOX */
+}
+
+/* ===== BOX ===== */
+.box {
+    width: 80%;                    /* THU NHỎ BỀ NGANG Ô */
+    max-width: 260px;
+    height: 100%;
+    max-height: 110px;
+    background: #fff;
+    border: 2px dashed #aaa;
+    border-radius: 12px;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+
+/* ===== IMAGE ===== */
+.animal,
+.shadow {
+    width: clamp(40px, 55%, 75px);
+    height: auto;
+}
+
+.animal {
+    cursor: grab;
+    touch-action: none;
+}
+
+.shadow {
+    filter: brightness(0);
+    opacity: 0.85;
+    pointer-events: none;
+}
+
+.correct {
+    border: 3px solid #4CAF50 !important;
+}
+
+/* ===== THIẾT BỊ THẤP ===== */
+@media (max-height: 600px) {
+    .box {
+        max-height: 90px;
+    }
+}
+
+/* ===== MOBILE ===== */
+@media (max-width: 600px) {
+    .game {
+        gap: 12px;
+        padding: 8px;
+    }
+
+    .column {
+        max-width: none;
+    }
+
+    .box {
+        width: 90%;
+    }
+}
+</style>
+</head>
+
+<body>
+
+<div class="header">
+    <h1>🐠 Kéo con vật vào đúng bóng</h1>
+    <div id="score">Điểm: 0</div>
+</div>
+
+<div class="game">
+    <div class="column" id="left"></div>
+    <div class="column" id="right"></div>
+</div>
+
+<script>
+const animals = [
+    { name: "shrimp", img: "https://img.icons8.com/?size=100&id=rm2ULHn0Cvt9&format=png&color=000000" },
+    { name: "crab", img: "https://img.icons8.com/color/96/crab.png" },
+    { name: "fish", img: "https://img.icons8.com/color/96/fish.png" }
+];
+
+function randomAnimals(count) {
+    return Array.from({ length: count }, () =>
+        animals[Math.floor(Math.random() * animals.length)]
+    );
+}
+
+const leftCol = document.getElementById("left");
+const rightCol = document.getElementById("right");
+let score = 0;
+
+const leftAnimals = randomAnimals(5);
+const rightAnimals = [...leftAnimals].sort(() => Math.random() - 0.5);
+
+/* LEFT */
+leftAnimals.forEach((a, i) => {
+    const box = document.createElement("div");
+    box.className = "box";
+
+    const img = document.createElement("img");
+    img.src = a.img;
+    img.className = "animal";
+    img.draggable = true;
+    img.id = "drag-" + i;
+    img.dataset.name = a.name;
+
+    img.addEventListener("dragstart", e => {
+        e.dataTransfer.setData("name", img.dataset.name);
+        e.dataTransfer.setData("id", img.id);
+    });
+
+    box.appendChild(img);
+    leftCol.appendChild(box);
+});
+
+/* RIGHT */
+rightAnimals.forEach(a => {
+    const box = document.createElement("div");
+    box.className = "box";
+    box.dataset.accept = a.name;
+
+    box.addEventListener("dragover", e => e.preventDefault());
+
+    box.addEventListener("drop", e => {
+        e.preventDefault();
+        const name = e.dataTransfer.getData("name");
+        const id = e.dataTransfer.getData("id");
+        const img = document.getElementById(id);
+
+        if (name === box.dataset.accept && !box.classList.contains("correct")) {
+            box.classList.add("correct");
+            box.innerHTML = "";
+            box.appendChild(img);
+            img.draggable = false;
+            score++;
+            document.getElementById("score").innerText = "Điểm: " + score;
+        }
+    });
+
+    const shadow = document.createElement("img");
+    shadow.src = a.img;
+    shadow.className = "shadow";
+
+    box.appendChild(shadow);
+    rightCol.appendChild(box);
+});
+</script>
+
+</body>
+</html>
