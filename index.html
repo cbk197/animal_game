@@ -2,13 +2,16 @@
 <html lang="vi">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 
-<title>Game kéo thả con vật</title>
+<title>Game kéo thả con vật (Mobile & PC)</title>
 
 <style>
 * {
     box-sizing: border-box;
+    /* Ngăn chặn việc chọn văn bản khi chơi game */
+    user-select: none; 
+    -webkit-user-select: none;
 }
 
 body {
@@ -17,6 +20,8 @@ body {
     background: #eef6ff;
     height: 100vh;
     overflow: hidden;
+    /* Ngăn cuộn trang trên mobile khi kéo */
+    overscroll-behavior: none; 
 }
 
 /* ===== HEADER ===== */
@@ -50,16 +55,16 @@ body {
 /* ===== COLUMN ===== */
 .column {
     flex: 1;
-    max-width: 380px;              /* GIỚI HẠN BỀ NGANG CỘT */
+    max-width: 380px;
     display: grid;
     grid-template-rows: repeat(5, 1fr);
     gap: 12px;
-    justify-items: center;         /* CĂN GIỮA BOX */
+    justify-items: center;
 }
 
 /* ===== BOX ===== */
 .box {
-    width: 80%;                    /* THU NHỎ BỀ NGANG Ô */
+    width: 80%;
     max-width: 260px;
     height: 100%;
     max-height: 110px;
@@ -69,6 +74,7 @@ body {
     display: flex;
     justify-content: center;
     align-items: center;
+    position: relative;
 }
 
 /* ===== IMAGE ===== */
@@ -80,17 +86,29 @@ body {
 
 .animal {
     cursor: grab;
-    touch-action: none;
+    /* Quan trọng cho mobile: tắt các hành động mặc định của trình duyệt */
+    touch-action: none; 
+    z-index: 10;
+}
+
+/* Class này dùng khi đang kéo trên mobile */
+.animal.dragging {
+    position: fixed;
+    pointer-events: none; /* Để touch event xuyên qua tìm element bên dưới */
+    z-index: 9999;
+    opacity: 0.8;
+    transform: scale(1.2);
 }
 
 .shadow {
     filter: brightness(0);
-    opacity: 0.85;
+    opacity: 0.15; /* Làm mờ bóng hơn chút để dễ nhìn */
     pointer-events: none;
 }
 
 .correct {
     border: 3px solid #4CAF50 !important;
+    background-color: #e8f5e9;
 }
 
 /* ===== THIẾT BỊ THẤP ===== */
@@ -106,13 +124,11 @@ body {
         gap: 12px;
         padding: 8px;
     }
-
     .column {
         max-width: none;
     }
-
     .box {
-        width: 90%;
+        width: 95%;
     }
 }
 </style>
@@ -137,46 +153,160 @@ const animals = [
     { name: "fish", img: "https://img.icons8.com/color/96/fish.png" }
 ];
 
+// Hàm lấy ngẫu nhiên
 function randomAnimals(count) {
-    return Array.from({ length: count }, () =>
-        animals[Math.floor(Math.random() * animals.length)]
-    );
+    const list = [];
+    for(let i=0; i<count; i++) {
+        list.push(animals[Math.floor(Math.random() * animals.length)]);
+    }
+    return list;
 }
 
 const leftCol = document.getElementById("left");
 const rightCol = document.getElementById("right");
 let score = 0;
 
-const leftAnimals = randomAnimals(5);
-const rightAnimals = [...leftAnimals].sort(() => Math.random() - 0.5);
+// Tạo dữ liệu game
+const leftAnimalsData = randomAnimals(5);
+const rightAnimalsData = [...leftAnimalsData].sort(() => Math.random() - 0.5);
 
-/* LEFT */
-leftAnimals.forEach((a, i) => {
+/* =========================================
+   HÀM XỬ LÝ LOGIC TOUCH (MOBILE)
+   ========================================= */
+let startX, startY, originalLeft, originalTop;
+let currentDraggedElement = null;
+
+function addTouchLogic(imgElement) {
+    
+    imgElement.addEventListener('touchstart', (e) => {
+        // Ngăn cuộn màn hình
+        e.preventDefault();
+        
+        const touch = e.touches[0];
+        currentDraggedElement = imgElement;
+        
+        // Lưu vị trí ban đầu để nếu sai thì trả về
+        const rect = imgElement.getBoundingClientRect();
+        
+        // Thiết lập trạng thái đang kéo
+        imgElement.classList.add('dragging');
+        
+        // Cập nhật vị trí ngay lập tức theo ngón tay
+        updatePosition(touch.clientX, touch.clientY, imgElement);
+    }, { passive: false });
+
+    imgElement.addEventListener('touchmove', (e) => {
+        e.preventDefault(); // Rất quan trọng để không bị cuộn trang
+        if (!currentDraggedElement) return;
+        
+        const touch = e.touches[0];
+        updatePosition(touch.clientX, touch.clientY, imgElement);
+    }, { passive: false });
+
+    imgElement.addEventListener('touchend', (e) => {
+        if (!currentDraggedElement) return;
+        
+        const touch = e.changedTouches[0];
+        
+        // 1. Tắt hiển thị tạm thời để tìm phần tử bên dưới ngón tay
+        imgElement.style.display = 'none';
+        let elementBelow = document.elementFromPoint(touch.clientX, touch.clientY);
+        imgElement.style.display = ''; // Hiển thị lại
+        
+        // 2. Tìm xem có thả vào cái hộp (box) nào không
+        let targetBox = elementBelow ? elementBelow.closest('.box') : null;
+
+        // 3. Kiểm tra logic đúng sai
+        if (targetBox && targetBox.dataset.accept === imgElement.dataset.name && !targetBox.classList.contains("correct")) {
+            // ĐÚNG:
+            handleCorrectDrop(imgElement, targetBox);
+        } else {
+            // SAI: Reset về vị trí cũ
+            resetElement(imgElement);
+        }
+
+        currentDraggedElement = null;
+    });
+}
+
+// Cập nhật vị trí ảnh theo ngón tay (căn giữa ảnh vào ngón tay)
+function updatePosition(x, y, element) {
+    element.style.left = (x - element.offsetWidth / 2) + 'px';
+    element.style.top = (y - element.offsetHeight / 2) + 'px';
+}
+
+// Trả ảnh về trạng thái ban đầu
+function resetElement(element) {
+    element.classList.remove('dragging');
+    element.style.left = '';
+    element.style.top = '';
+    element.style.position = '';
+}
+
+// Xử lý khi thả đúng (Dùng chung cho cả Mobile và PC)
+function handleCorrectDrop(imgElement, targetBox) {
+    targetBox.classList.add("correct");
+    targetBox.innerHTML = ""; // Xóa bóng đen
+    
+    // Reset style mobile trước khi append
+    imgElement.classList.remove('dragging');
+    imgElement.style.position = '';
+    imgElement.style.left = '';
+    imgElement.style.top = '';
+    
+    // Tắt khả năng kéo tiếp
+    imgElement.draggable = false;
+    // Clone node để tránh lỗi event listener cũ hoặc append trực tiếp
+    const newImg = imgElement.cloneNode(true);
+    targetBox.appendChild(newImg);
+    
+    // Xóa ảnh ở cột trái
+    imgElement.remove();
+
+    score++;
+    document.getElementById("score").innerText = "Điểm: " + score;
+    
+    if(score === 5) {
+        setTimeout(() => alert("Chúc mừng! Bạn đã thắng!"), 200);
+    }
+}
+
+/* =========================================
+   KHỞI TẠO CỘT TRÁI (CON VẬT)
+   ========================================= */
+leftAnimalsData.forEach((a, i) => {
     const box = document.createElement("div");
     box.className = "box";
 
     const img = document.createElement("img");
     img.src = a.img;
     img.className = "animal";
-    img.draggable = true;
+    img.draggable = true; // Giữ cho PC
     img.id = "drag-" + i;
     img.dataset.name = a.name;
 
+    // --- SỰ KIỆN CHO PC (MOUSE) ---
     img.addEventListener("dragstart", e => {
         e.dataTransfer.setData("name", img.dataset.name);
         e.dataTransfer.setData("id", img.id);
     });
 
+    // --- SỰ KIỆN CHO MOBILE (TOUCH) ---
+    addTouchLogic(img);
+
     box.appendChild(img);
     leftCol.appendChild(box);
 });
 
-/* RIGHT */
-rightAnimals.forEach(a => {
+/* =========================================
+   KHỞI TẠO CỘT PHẢI (BÓNG ĐEN)
+   ========================================= */
+rightAnimalsData.forEach(a => {
     const box = document.createElement("div");
     box.className = "box";
     box.dataset.accept = a.name;
 
+    // --- SỰ KIỆN CHO PC (DROP ZONE) ---
     box.addEventListener("dragover", e => e.preventDefault());
 
     box.addEventListener("drop", e => {
@@ -186,12 +316,7 @@ rightAnimals.forEach(a => {
         const img = document.getElementById(id);
 
         if (name === box.dataset.accept && !box.classList.contains("correct")) {
-            box.classList.add("correct");
-            box.innerHTML = "";
-            box.appendChild(img);
-            img.draggable = false;
-            score++;
-            document.getElementById("score").innerText = "Điểm: " + score;
+            handleCorrectDrop(img, box);
         }
     });
 
