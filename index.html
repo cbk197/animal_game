@@ -9,7 +9,6 @@
 <style>
 * {
     box-sizing: border-box;
-    /* Ngăn chặn việc chọn văn bản khi chơi game */
     user-select: none; 
     -webkit-user-select: none;
 }
@@ -20,32 +19,59 @@ body {
     background: #eef6ff;
     height: 100vh;
     overflow: hidden;
-    /* Ngăn cuộn trang trên mobile khi kéo */
     overscroll-behavior: none; 
 }
 
 /* ===== HEADER ===== */
 .header {
-    height: 80px;
+    height: 100px; /* Increased height slightly for the button */
     text-align: center;
     padding-top: 8px;
+    background-color: #fff;
+    box-shadow: 0 2px 5px rgba(0,0,0,0.05);
 }
 
 .header h1 {
     font-size: clamp(18px, 2.5vw, 24px);
-    margin: 0;
+    margin: 0 0 5px 0;
+    color: #333;
+}
+
+.control-panel {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: 20px;
 }
 
 #score {
     font-size: clamp(16px, 2vw, 20px);
     font-weight: bold;
     color: #2c7;
-    margin-top: 4px;
+}
+
+/* New Button Style */
+.btn-reset {
+    background-color: #ff9800;
+    color: white;
+    border: none;
+    padding: 6px 16px;
+    border-radius: 20px;
+    font-size: 14px;
+    font-weight: bold;
+    cursor: pointer;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+    transition: transform 0.1s;
+}
+
+.btn-reset:active {
+    transform: scale(0.95);
+    background-color: #f57c00;
 }
 
 /* ===== GAME ===== */
 .game {
-    height: calc(100vh - 80px);
+    height: calc(100vh - 100px); /* Adjusted for header height */
     display: flex;
     justify-content: center;
     gap: 24px;
@@ -75,6 +101,7 @@ body {
     justify-content: center;
     align-items: center;
     position: relative;
+    transition: background-color 0.3s;
 }
 
 /* ===== IMAGE ===== */
@@ -86,15 +113,13 @@ body {
 
 .animal {
     cursor: grab;
-    /* Quan trọng cho mobile: tắt các hành động mặc định của trình duyệt */
     touch-action: none; 
     z-index: 10;
 }
 
-/* Class này dùng khi đang kéo trên mobile */
 .animal.dragging {
     position: fixed;
-    pointer-events: none; /* Để touch event xuyên qua tìm element bên dưới */
+    pointer-events: none; 
     z-index: 9999;
     opacity: 0.8;
     transform: scale(1.2);
@@ -102,7 +127,7 @@ body {
 
 .shadow {
     filter: brightness(0);
-    opacity: 0.15; /* Làm mờ bóng hơn chút để dễ nhìn */
+    opacity: 0.15;
     pointer-events: none;
 }
 
@@ -138,7 +163,10 @@ body {
 
 <div class="header">
     <h1>🐠 Kéo con vật vào đúng bóng</h1>
-    <div id="score">Điểm: 0</div>
+    <div class="control-panel">
+        <div id="score">Điểm: 0</div>
+        <button class="btn-reset" onclick="initGame()">🔄 Chơi lại</button>
+    </div>
 </div>
 
 <div class="game">
@@ -150,8 +178,15 @@ body {
 const animals = [
     { name: "shrimp", img: "https://img.icons8.com/?size=100&id=rm2ULHn0Cvt9&format=png&color=000000" },
     { name: "crab", img: "https://img.icons8.com/?size=100&id=s0h6NKLkxJYl&format=png&color=000000" },
-    { name: "fish", img: "https://img.icons8.com/?size=100&id=HigYjmxQTeyD&format=png&color=000000" }
+    { name: "fish", img: "https://img.icons8.com/?size=100&id=HigYjmxQTeyD&format=png&color=000000" },
+    { name: "octopus", img: "https://img.icons8.com/?size=100&id=13023&format=png&color=000000" },
+    { name: "turtle", img: "https://img.icons8.com/?size=100&id=16075&format=png&color=000000" }
 ];
+
+const leftCol = document.getElementById("left");
+const rightCol = document.getElementById("right");
+const scoreEl = document.getElementById("score");
+let score = 0;
 
 // Hàm lấy ngẫu nhiên
 function randomAnimals(count) {
@@ -162,43 +197,95 @@ function randomAnimals(count) {
     return list;
 }
 
-const leftCol = document.getElementById("left");
-const rightCol = document.getElementById("right");
-let score = 0;
+/* =========================================
+   CORE LOGIC START / RESET GAME
+   ========================================= */
+function initGame() {
+    // 1. Reset Score
+    score = 0;
+    scoreEl.innerText = "Điểm: 0";
+    
+    // 2. Clear Columns
+    leftCol.innerHTML = "";
+    rightCol.innerHTML = "";
 
-// Tạo dữ liệu game
-const leftAnimalsData = randomAnimals(5);
-const rightAnimalsData = [...leftAnimalsData].sort(() => Math.random() - 0.5);
+    // 3. Generate New Data
+    const leftAnimalsData = randomAnimals(5);
+    // Shuffle right column based on left column data so there is always a match
+    const rightAnimalsData = [...leftAnimalsData].sort(() => Math.random() - 0.5);
+
+    // 4. Create Left Column (Draggable Animals)
+    leftAnimalsData.forEach((a, i) => {
+        const box = document.createElement("div");
+        box.className = "box";
+
+        const img = document.createElement("img");
+        img.src = a.img;
+        img.className = "animal";
+        img.draggable = true; // PC
+        img.id = "drag-" + i;
+        img.dataset.name = a.name;
+
+        // PC Event
+        img.addEventListener("dragstart", e => {
+            e.dataTransfer.setData("name", img.dataset.name);
+            e.dataTransfer.setData("id", img.id);
+        });
+
+        // Mobile Event
+        addTouchLogic(img);
+
+        box.appendChild(img);
+        leftCol.appendChild(box);
+    });
+
+    // 5. Create Right Column (Shadow Drop Targets)
+    rightAnimalsData.forEach(a => {
+        const box = document.createElement("div");
+        box.className = "box";
+        box.dataset.accept = a.name;
+
+        // PC Drop Events
+        box.addEventListener("dragover", e => e.preventDefault());
+        box.addEventListener("drop", e => {
+            e.preventDefault();
+            const name = e.dataTransfer.getData("name");
+            const id = e.dataTransfer.getData("id");
+            const img = document.getElementById(id);
+
+            // Check if element exists (handling race conditions)
+            if (img && name === box.dataset.accept && !box.classList.contains("correct")) {
+                handleCorrectDrop(img, box);
+            }
+        });
+
+        const shadow = document.createElement("img");
+        shadow.src = a.img;
+        shadow.className = "shadow";
+
+        box.appendChild(shadow);
+        rightCol.appendChild(box);
+    });
+}
 
 /* =========================================
-   HÀM XỬ LÝ LOGIC TOUCH (MOBILE)
+   LOGIC TOUCH (MOBILE)
    ========================================= */
-let startX, startY, originalLeft, originalTop;
 let currentDraggedElement = null;
 
 function addTouchLogic(imgElement) {
-    
     imgElement.addEventListener('touchstart', (e) => {
-        // Ngăn cuộn màn hình
         e.preventDefault();
-        
         const touch = e.touches[0];
         currentDraggedElement = imgElement;
         
-        // Lưu vị trí ban đầu để nếu sai thì trả về
-        const rect = imgElement.getBoundingClientRect();
-        
-        // Thiết lập trạng thái đang kéo
         imgElement.classList.add('dragging');
-        
-        // Cập nhật vị trí ngay lập tức theo ngón tay
         updatePosition(touch.clientX, touch.clientY, imgElement);
     }, { passive: false });
 
     imgElement.addEventListener('touchmove', (e) => {
-        e.preventDefault(); // Rất quan trọng để không bị cuộn trang
+        e.preventDefault();
         if (!currentDraggedElement) return;
-        
         const touch = e.touches[0];
         updatePosition(touch.clientX, touch.clientY, imgElement);
     }, { passive: false });
@@ -207,35 +294,26 @@ function addTouchLogic(imgElement) {
         if (!currentDraggedElement) return;
         
         const touch = e.changedTouches[0];
-        
-        // 1. Tắt hiển thị tạm thời để tìm phần tử bên dưới ngón tay
         imgElement.style.display = 'none';
         let elementBelow = document.elementFromPoint(touch.clientX, touch.clientY);
-        imgElement.style.display = ''; // Hiển thị lại
+        imgElement.style.display = ''; 
         
-        // 2. Tìm xem có thả vào cái hộp (box) nào không
         let targetBox = elementBelow ? elementBelow.closest('.box') : null;
 
-        // 3. Kiểm tra logic đúng sai
         if (targetBox && targetBox.dataset.accept === imgElement.dataset.name && !targetBox.classList.contains("correct")) {
-            // ĐÚNG:
             handleCorrectDrop(imgElement, targetBox);
         } else {
-            // SAI: Reset về vị trí cũ
             resetElement(imgElement);
         }
-
         currentDraggedElement = null;
     });
 }
 
-// Cập nhật vị trí ảnh theo ngón tay (căn giữa ảnh vào ngón tay)
 function updatePosition(x, y, element) {
     element.style.left = (x - element.offsetWidth / 2) + 'px';
     element.style.top = (y - element.offsetHeight / 2) + 'px';
 }
 
-// Trả ảnh về trạng thái ban đầu
 function resetElement(element) {
     element.classList.remove('dragging');
     element.style.left = '';
@@ -243,92 +321,38 @@ function resetElement(element) {
     element.style.position = '';
 }
 
-// Xử lý khi thả đúng (Dùng chung cho cả Mobile và PC)
+// Logic handle drop (Both PC & Mobile)
 function handleCorrectDrop(imgElement, targetBox) {
     targetBox.classList.add("correct");
-    targetBox.innerHTML = ""; // Xóa bóng đen
+    targetBox.innerHTML = ""; 
     
-    // Reset style mobile trước khi append
     imgElement.classList.remove('dragging');
     imgElement.style.position = '';
     imgElement.style.left = '';
     imgElement.style.top = '';
-    
-    // Tắt khả năng kéo tiếp
     imgElement.draggable = false;
-    // Clone node để tránh lỗi event listener cũ hoặc append trực tiếp
+    
     const newImg = imgElement.cloneNode(true);
     targetBox.appendChild(newImg);
     
-    // Xóa ảnh ở cột trái
     imgElement.remove();
 
     score++;
-    document.getElementById("score").innerText = "Điểm: " + score;
+    scoreEl.innerText = "Điểm: " + score;
     
     if(score === 5) {
-        setTimeout(() => alert("Chúc mừng! Bạn đã thắng!"), 200);
+        setTimeout(() => {
+            if(confirm("Chúc mừng! Bạn đã thắng! Chơi lại không?")) {
+                initGame();
+            }
+        }, 300);
     }
 }
 
-/* =========================================
-   KHỞI TẠO CỘT TRÁI (CON VẬT)
-   ========================================= */
-leftAnimalsData.forEach((a, i) => {
-    const box = document.createElement("div");
-    box.className = "box";
+// START GAME ON LOAD
+initGame();
 
-    const img = document.createElement("img");
-    img.src = a.img;
-    img.className = "animal";
-    img.draggable = true; // Giữ cho PC
-    img.id = "drag-" + i;
-    img.dataset.name = a.name;
-
-    // --- SỰ KIỆN CHO PC (MOUSE) ---
-    img.addEventListener("dragstart", e => {
-        e.dataTransfer.setData("name", img.dataset.name);
-        e.dataTransfer.setData("id", img.id);
-    });
-
-    // --- SỰ KIỆN CHO MOBILE (TOUCH) ---
-    addTouchLogic(img);
-
-    box.appendChild(img);
-    leftCol.appendChild(box);
-});
-
-/* =========================================
-   KHỞI TẠO CỘT PHẢI (BÓNG ĐEN)
-   ========================================= */
-rightAnimalsData.forEach(a => {
-    const box = document.createElement("div");
-    box.className = "box";
-    box.dataset.accept = a.name;
-
-    // --- SỰ KIỆN CHO PC (DROP ZONE) ---
-    box.addEventListener("dragover", e => e.preventDefault());
-
-    box.addEventListener("drop", e => {
-        e.preventDefault();
-        const name = e.dataTransfer.getData("name");
-        const id = e.dataTransfer.getData("id");
-        const img = document.getElementById(id);
-
-        if (name === box.dataset.accept && !box.classList.contains("correct")) {
-            handleCorrectDrop(img, box);
-        }
-    });
-
-    const shadow = document.createElement("img");
-    shadow.src = a.img;
-    shadow.className = "shadow";
-
-    box.appendChild(shadow);
-    rightCol.appendChild(box);
-});
 </script>
 
 </body>
 </html>
-
